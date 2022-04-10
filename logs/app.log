@@ -18,3 +18,4 @@
 {"level":"info","message":[{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFkbWluQGdtYWlsLmNvbSIsImlkIjozLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE2NDk2MTY5MzAsImV4cCI6MTY0OTYxODEzMH0.1J3UZhVHMhKUIy95IGhi9--K8uHGqUttl4iffE8MVOQ","email":"admin@gmail.com","id":3,"password":"$2b$04$HsbEZyMeUWZyQtijXApaXujfhnX67JcJf.jmFltL6qE3sulf2GlMO","refreshToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFkbWluQGdtYWlsLmNvbSIsImlkIjozLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE2NDk2MTY5MzAsImV4cCI6MTY0OTY4ODkzMH0.Tg0ryDmQQwmLdeNgYFQqgUn5N98fNwh6i3HY-j4shvU","role":"admin"}],"metadata":{}}
 {"level":"info","message":"server started on 8080","metadata":{}}
 {"level":"info","message":"server started on 8080","metadata":{}}
+{"level":"info","message":"server started on 8080","metadata":{}}
