@@ -1,13 +1,41 @@
-const pool = require("../dbConn");
+const { QueryTypes } = require('sequelize');
+const sequelize = require('../dbConn/sequelizeConn');
+const ApiError = require('../error/ApiError');
 
+// eslint-disable-next-line consistent-return
+function parseDbAnswer(answer, type) {
+    if (type === 'select') { return answer[0]; }
+    return answer[0][0];
+}
 class BrandService {
     async create(name) {
-        const created = await pool.query('INSERT INTO brand(name)  VALUES ($1) RETURNING *', [name]);
-        return created;
+        try {
+            const created = await sequelize.query(
+                'INSERT INTO "brands" (name) VALUES (?) RETURNING id,name',
+                {
+                    replacements: [name],
+                    type: QueryTypes.INSERT,
+                },
+            );
+
+            const createdData = parseDbAnswer(created, 'insert');
+            if (!created) {
+                return ApiError.BadRequest(403, `this name - ${name} of brand already exists`);
+            }
+            return createdData;
+        } catch (error) {
+            return ApiError.BadRequest(403, `this name - ${name} of type already exists`);
+        }
     }
+
     async getAll() {
-        const all = await pool.query('SELECT * FROM brand');
-        return all;
+        const allBrands = await sequelize.query(
+            'SELECT * FROM "brands"',
+            {
+                type: QueryTypes.SELECT,
+            },
+        );
+        return allBrands;
     }
 }
 

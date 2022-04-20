@@ -1,7 +1,6 @@
+const { Router } = require('express');
 const { checkRole } = require('../middleware/roleMiddleware');
 const brandService = require('../service/brandService');
-
-const Router = require('express').Router;
 
 const router = new Router();
 
@@ -10,13 +9,13 @@ router.post('/', checkRole(['admin']), async (req, res, next) => {
     const created = await brandService.create(name);
     // console.log(created);
     // return created
-    res.json(created.rows);
-})
+    res.json(created);
+});
 router.get('/', async (req, res, next) => {
     const allBrands = await brandService.getAll();
     // console.log(allBrands);
     // return allBrands
-    res.json(allBrands.rows);
-})
+    res.json(allBrands);
+});
 
 module.exports = router;

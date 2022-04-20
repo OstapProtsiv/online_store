@@ -2,6 +2,8 @@ const pool = require("../dbConn");
 const ApiError = require("../error/ApiError");
 const bcrypt = require('bcrypt');
 const tokenService = require("./tokenService");
+const { QueryTypes } = require('sequelize');
+const sequelize = require('../dbConn/sequelizeConn');
 
 function checkParams(email, password) {
     if (!(/@gmail.com|@ukr.net/).test(email)) {
@@ -12,53 +14,110 @@ function checkParams(email, password) {
     }
 }
 
+function parseDbAnswer(answer, type) {
+    if (type == 'select')
+        return answer[0];
+    if (type == 'insert')
+        return answer[0][0];
+}
+
 class UserService {
     async registration(email, password, role) {
-        // check email and password with something like dto
-        // when create user create his basket
-        //check email.isemail() password length
         checkParams(email, password);
-        const candidate = await pool.query('SELECT FROM user1 where email=$1', [email]);
 
-        if (candidate.rows.length) {
+        const candidate = await sequelize.query(
+            'SELECT * FROM  users where email=?',
+            {
+                replacements: [email],
+                type: QueryTypes.SELECT,
+            }
+        )
+
+        if (candidate.length) {
             throw ApiError.BadRequest(401, 'User with such email already exists');
         }
         const hashPassword = await bcrypt.hash(password, 4);
-        let user = await pool.query('INSERT INTO user1 (email,password,role) VALUES ($1,$2,$3) RETURNING *', [email, hashPassword, role]);
-        const { accessToken, refreshToken } = tokenService.createTokens({ email, id: user.rows[0].id, role });
-        let savedRefresh = await pool.query('INSERT INTO user_token (user_id,refreshtoken) VALUES ($1,$2)', [user.rows[0].id, refreshToken])// refreshtoken vse z maloi
-        await pool.query('INSERT INTO basket (user_id) VALUES ($1)', [user.rows[0].id]);
-        user.rows[0].refreshToken = refreshToken;
-        user.rows[0].accessToken = accessToken;
-        return user.rows;
+
+        let user = await sequelize.query(
+            'INSERT INTO users (email,password,role) VALUES (?,?,?) RETURNING *',
+            { replacements: [email, hashPassword, role], type: QueryTypes.INSERT }
+        );
+        let userData = parseDbAnswer(user, 'insert');
+        const { accessToken, refreshToken } = tokenService.createTokens({ email, id: userData.id, role });
+
+        await sequelize.query(
+            'INSERT INTO "userTokens" ("userId","refreshToken") VALUES (?,?) RETURNING *',
+            {
+                replacements: [userData.id, refreshToken],
+                type: QueryTypes.INSERT
+            }
+        )
+        await sequelize.query(
+            'INSERT INTO baskets ("userId") VALUES (?)',
+            {
+                replacements: [userData.id],
+                type: QueryTypes.INSERT
+            }
+        )
+        userData.refreshToken = refreshToken;
+        userData.accessToken = accessToken;
+        return userData;
     }
 
     async login(email, password) {
-        let user = await pool.query('SELECT * FROM user1 WHERE email=$1', [email]);
-        if (!user.rows.length) {
+        let user = await sequelize.query(
+            'SELECT * FROM users WHERE email=?',
+            {
+                replacements: [email],
+                type: QueryTypes.SELECT
+            }
+        )
+        if (!user.length) {
             throw ApiError.BadRequest(401, `there is no user with email=${email}`);
         }
-        let hashedPassword = user.rows[0].password;
+
+        let userData = parseDbAnswer(user, 'select');
+        console.log(userData);
+        let hashedPassword = userData.password;
         let isEqual = await bcrypt.compare(password, hashedPassword);
         if (!isEqual) {
             throw ApiError.BadRequest(401, `Wrong password entered`);
         }
-        const { accessToken, refreshToken } = tokenService.createTokens({ email, id: user.rows[0].id, role: user.rows[0].role });
-        await pool.query('UPDATE user_token SET refreshtoken = $1 where id =$2', [refreshToken, user.rows[0].id]);
-        user.rows[0].refreshToken = refreshToken;
-        user.rows[0].accessToken = accessToken;
-        return user.rows;
+        const { accessToken, refreshToken } = tokenService.createTokens({ email, id: userData.id, role: userData.role });
+
+        await sequelize.query(
+            'UPDATE "userTokens" SET "refreshToken" = ? WHERE id =?',
+            {
+                replacements: [refreshToken, userData.id]
+            }
+        )
+        userData.refreshToken = refreshToken;
+        userData.accessToken = accessToken;
+        return userData;
     }
 
     async refresh(token) {
         let userData = tokenService.validateRefresh(token);
-        let oldToken = (await pool.query('SELECT refreshtoken FROM user_token where user_id=$1', [userData.id])).rows[0].refreshtoken;
-        if (oldToken != token) {
+        // let oldToken = (await pool.query('SELECT refreshtoken FROM user_token where user_id=$1', [userData.id])).rows[0].refreshtoken;
+        let oldToken = await sequelize.query(
+            'SELECT "refreshToken" FROM "userTokens" WHERE "userId"=?',
+            {
+                replacements: [userData.id],
+                type: QueryTypes.SELECT
+            }
+        )
+        if (oldToken[0].refreshToken != token) {
             throw ApiError.BadRequest(401, 'wrong refresh token');
         }
         const tokens = tokenService.createTokens({ email: userData.email, id: userData.id, role: userData.role });
+        await sequelize.query(
+            'UPDATE "userTokens" SET "refreshToken" = ? WHERE id =?',
+            {
+                replacements: [tokens.refreshToken, userData.id]
+            }
+        )
         return tokens;
-        // let oldToken=await pool.query('SELECT refreshtoken FROM user_token where')
+
     }
 }
 
