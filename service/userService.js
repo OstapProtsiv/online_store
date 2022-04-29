@@ -1,9 +1,8 @@
-const pool = require("../dbConn");
-const ApiError = require("../error/ApiError");
 const bcrypt = require('bcrypt');
-const tokenService = require("./tokenService");
-const { QueryTypes } = require('sequelize');
-const sequelize = require('../dbConn/sequelizeConn');
+const ApiError = require('../error/ApiError');
+const tokenService = require('./tokenService');
+
+const models = require('../models');
 
 function checkParams(email, password) {
     if (!(/@gmail.com|@ukr.net/).test(email)) {
@@ -14,110 +13,137 @@ function checkParams(email, password) {
     }
 }
 
-function parseDbAnswer(answer, type) {
-    if (type == 'select')
-        return answer[0];
-    if (type == 'insert')
-        return answer[0][0];
+function parseDbAnswer(answer) {
+    return answer.dataValues;
 }
 
 class UserService {
     async registration(email, password, role) {
         checkParams(email, password);
 
-        const candidate = await sequelize.query(
-            'SELECT * FROM  users where email=?',
-            {
-                replacements: [email],
-                type: QueryTypes.SELECT,
-            }
-        )
+        const candidate = models.user.findAll({
+            where: {
+                email,
+            },
+        });
 
         if (candidate.length) {
             throw ApiError.BadRequest(401, 'User with such email already exists');
         }
         const hashPassword = await bcrypt.hash(password, 4);
 
-        let user = await sequelize.query(
-            'INSERT INTO users (email,password,role) VALUES (?,?,?) RETURNING *',
-            { replacements: [email, hashPassword, role], type: QueryTypes.INSERT }
-        );
-        let userData = parseDbAnswer(user, 'insert');
-        const { accessToken, refreshToken } = tokenService.createTokens({ email, id: userData.id, role });
+        const user = await models.user.create({
+            email,
+            password: hashPassword,
+            role,
+        });
 
-        await sequelize.query(
-            'INSERT INTO "userTokens" ("userId","refreshToken") VALUES (?,?) RETURNING *',
-            {
-                replacements: [userData.id, refreshToken],
-                type: QueryTypes.INSERT
-            }
-        )
-        await sequelize.query(
-            'INSERT INTO baskets ("userId") VALUES (?)',
-            {
-                replacements: [userData.id],
-                type: QueryTypes.INSERT
-            }
-        )
+        const userData = parseDbAnswer(user);
+
+        const {
+            accessToken,
+            refreshToken,
+        } = tokenService.createTokens({ email, id: userData.id, role });
+
+        await models.userToken.create({
+            userId: userData.id,
+            refreshToken,
+        });
+
+        await models.basket.create({
+            userId: userData.id,
+        });
         userData.refreshToken = refreshToken;
         userData.accessToken = accessToken;
         return userData;
     }
 
     async login(email, password) {
-        let user = await sequelize.query(
-            'SELECT * FROM users WHERE email=?',
-            {
-                replacements: [email],
-                type: QueryTypes.SELECT
-            }
-        )
+        const user = await models.user.findAll({
+            where: {
+                email,
+            },
+        });
+
         if (!user.length) {
             throw ApiError.BadRequest(401, `there is no user with email=${email}`);
         }
 
-        let userData = parseDbAnswer(user, 'select');
-        console.log(userData);
-        let hashedPassword = userData.password;
-        let isEqual = await bcrypt.compare(password, hashedPassword);
-        if (!isEqual) {
-            throw ApiError.BadRequest(401, `Wrong password entered`);
-        }
-        const { accessToken, refreshToken } = tokenService.createTokens({ email, id: userData.id, role: userData.role });
+        const userData = parseDbAnswer(user[0]);
 
-        await sequelize.query(
-            'UPDATE "userTokens" SET "refreshToken" = ? WHERE id =?',
-            {
-                replacements: [refreshToken, userData.id]
-            }
-        )
+        const hashedPassword = userData.password;
+        const isEqual = await bcrypt.compare(password, hashedPassword);
+        if (!isEqual) {
+            throw ApiError.BadRequest(401, 'Wrong password entered');
+        }
+        const {
+            accessToken,
+            refreshToken,
+        } = tokenService.createTokens({ email, id: userData.id, role: userData.role });
+
+        await models.userToken.update({ refreshToken }, {
+            where: {
+                userId: userData.id,
+            },
+        });
+
         userData.refreshToken = refreshToken;
         userData.accessToken = accessToken;
         return userData;
     }
 
     async refresh(token) {
-        let userData = tokenService.validateRefresh(token);
-        // let oldToken = (await pool.query('SELECT refreshtoken FROM user_token where user_id=$1', [userData.id])).rows[0].refreshtoken;
-        let oldToken = await sequelize.query(
-            'SELECT "refreshToken" FROM "userTokens" WHERE "userId"=?',
-            {
-                replacements: [userData.id],
-                type: QueryTypes.SELECT
-            }
-        )
-        if (oldToken[0].refreshToken != token) {
+        const userData = tokenService.validateRefresh(token);
+        const oldToken = await models.refreshToken.findAll({
+            attributes: ['refreshToken'],
+            where: {
+                userId: userData.id,
+            },
+        });
+
+        if (oldToken[0].refreshToken !== token) {
             throw ApiError.BadRequest(401, 'wrong refresh token');
         }
-        const tokens = tokenService.createTokens({ email: userData.email, id: userData.id, role: userData.role });
-        await sequelize.query(
-            'UPDATE "userTokens" SET "refreshToken" = ? WHERE id =?',
-            {
-                replacements: [tokens.refreshToken, userData.id]
-            }
-        )
-        return tokens;
+        const {
+            accessToken,
+            refreshToken,
+        } = tokenService.createTokens(
+            { email: userData.email, id: userData.id, role: userData.role },
+        );
 
+        await models.userToken.update(
+            { refreshToken },
+            {
+                where: {
+                    userId: userData.id,
+                },
+            },
+        );
+        return { refreshToken, accessToken };
+    }
+
+    async delete(email) {
+        const userToDelete = parseDbAnswer(await models.user.findOne({
+            where: {
+                email,
+            },
+        }));
+        await models.basket.destroy({
+            where: {
+                userId: userToDelete.id,
+            },
+        });
+        await models.userToken.destroy({
+            where: {
+                userId: userToDelete.id,
+            },
+        });
+        const deletedUser = await models.user.destroy({
+            where: {
+                id: userToDelete.id,
+            },
+        });
+        return deletedUser;
     }
 }
 

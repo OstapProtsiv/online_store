@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       productType.belongsToMany(models.brand, { through: 'typeBrands', foreignKey: 'id' });
-      productType.belongsTo(models.device);
+      productType.hasOne(models.device);
     }
   }
   productType.init({

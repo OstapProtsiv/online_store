@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
         models.productType,
         { through: 'typeBrands', foreignKey: 'id' },
       );
+      brand.hasOne(models.device);
     }
   }
   brand.init({

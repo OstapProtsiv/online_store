@@ -5,7 +5,7 @@ const {
 module.exports = (sequelize, DataTypes) => {
   class userToken extends Model {
     static associate(models) {
-      userToken.hasOne(models.user);
+      userToken.belongsTo(models.user);
     }
   }
   userToken.init({

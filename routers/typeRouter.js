@@ -4,6 +4,7 @@ const typeService = require('../service/typeService');
 
 const router = new Router();
 
+// eslint-disable-next-line consistent-return
 router.post('/', checkRole(['admin']), async (req, res, next) => {
     try {
         const { name } = req.body;

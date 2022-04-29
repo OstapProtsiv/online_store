@@ -1,21 +1,24 @@
 {
   "development": {
     "username": "postgres",
-    "password": "",
+    "password": "password",
     "database": "online_store2",
     "host": "localhost",
-    "dialect": "postgres"
+    "dialect": "postgres",
+    "define": {
+      "timestamps": false
+    }
   },
   "test": {
     "username": "root",
-    "password": "",
+    "password": "password",
     "database": "online_store2",
     "host": "127.0.0.1",
     "dialect": "postgres"
   },
   "production": {
     "username": "root",
-    "password": "",
+    "password": "password",
     "database": "online_store2",
     "host": "127.0.0.1",
     "dialect": "postgres"

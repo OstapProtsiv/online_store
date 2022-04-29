@@ -2,24 +2,30 @@
 /* eslint-disable max-len */
 const uuid = require('uuid');
 const path = require('path');
-const { QueryTypes } = require('sequelize');
 const ApiError = require('../error/ApiError');
-const sequelize = require('../dbConn/sequelizeConn');
+const models = require('../models');
 
 function parseDbAnswer(answer, type) {
-    if (type === 'select') { return answer[0]; }
-    return answer[0][0];
+    return answer.dataValues;
 }
 class DeviveService {
-    async create(name, price, rating, imgName, typeId, brandId, info) {
-        const created = await sequelize.query(
-            'INSERT INTO devices (name,price,rating,img,"typeId","brandId") VALUES (?,?,?,?,?,?) RETURNING *',
-            {
-                replacements: [name, price, rating, imgName, typeId, brandId],
-                type: QueryTypes.INSERT,
-            },
-        );
-        const createdData = parseDbAnswer(created, 'insert');
+    async create(name, price, rating, imgName, typeId, brandId) {
+        const created = await models.device.create({
+            name,
+            price,
+            rating,
+            img: imgName,
+            typeId,
+            brandId,
+        });
+        // const created = await sequelize.query(
+        //     'INSERT INTO devices (name,price,rating,img,"typeId","brandId") VALUES (?,?,?,?,?,?) RETURNING *',
+        //     {
+        //         replacements: [name, price, rating, imgName, typeId, brandId],
+        //         type: QueryTypes.INSERT,
+        //     },
+        // );
+        const createdData = parseDbAnswer(created);
 
         return createdData;
     }
@@ -35,86 +41,152 @@ class DeviveService {
         const offset = page * limit - limit || 0;
         let all;
         if (!brandId && !typeId) {
-            // all = await pool.query('SELECT * FROM device limit $1 offset $2', [limit, offset]);
-            all = await sequelize.query(
-                'SELECT * FROM devices limit ? offset ?',
-                {
-                    replacements: [limit, offset],
-                    type: QueryTypes.SELECT,
-                },
-            );
+            all = await models.device.findAll({
+                limit,
+                offset,
+            });
+            // all = await sequelize.query(
+            //     'SELECT * FROM devices limit ? offset ?',
+            //     {
+            //         replacements: [limit, offset],
+            //         type: QueryTypes.SELECT,
+            //     },
+            // );
         }
         if (!brandId && typeId) {
-            // all = await pool.query('SELECT * FROM device WHERE type_id= $1 limit $2 offset $3', [typeId, limit, offset]);
-            all = await sequelize.query(
-                'SELECT * FROM devices WHERE "typeId"= ? limit ? offset ?',
-                {
-                    replacements: [typeId, limit, offset],
-                    type: QueryTypes.SELECT,
+            all = await models.device.findAll({
+                where: {
+                    typeId,
                 },
-            );
+                limit,
+                offset,
+            });
+            // all = await sequelize.query(
+            //     'SELECT * FROM devices WHERE "typeId"= ? limit ? offset ?',
+            //     {
+            //         replacements: [typeId, limit, offset],
+            //         type: QueryTypes.SELECT,
+            //     },
+            // );
         }
         if (brandId && !typeId) {
-            // all = await pool.query('SELECT * FROM device WHERE brand_id = $1 limit $2 offset $3', [brandId, limit, offset]);
-            all = await sequelize.query(
-                'SELECT * FROM devices WHERE "brandId" = ? limit ? offset ?',
-                {
-                    replacements: [brandId, limit, offset],
-                    type: QueryTypes.SELECT,
+            all = await models.device.findAll({
+                where: {
+                    brandId,
                 },
-            );
+                limit,
+                offset,
+            });
+            // all = await sequelize.query(
+            //     'SELECT * FROM devices WHERE "brandId" = ? limit ? offset ?',
+            //     {
+            //         replacements: [brandId, limit, offset],
+            //         type: QueryTypes.SELECT,
+            //     },
+            // );
         }
         if (brandId && typeId) {
-            // all = await pool.query('SELECT * FROM device WHERE type_id=$1 AND brand_id = $2 LIMIT $3 OFFSET $4', [typeId, brandId, limit, offset]);
-            all = await sequelize.query(
-                'SELECT * FROM devices WHERE "typeId"=? AND "brandId" = ? LIMIT ? OFFSET ?',
-                {
-                    replacements: [brandId, limit, offset],
-                    type: QueryTypes.SELECT,
+            all = await models.device.findAll({
+                where: {
+                    typeId,
+                    brandId,
                 },
-            );
+                limit,
+                offset,
+            });
+            // all = await sequelize.query(
+            //     'SELECT * FROM devices WHERE "typeId"=? AND "brandId" = ? LIMIT ? OFFSET ?',
+            //     {
+            //         replacements: [brandId, limit, offset],
+            //         type: QueryTypes.SELECT,
+            //     },
+            // );
         }
-        console.log(all);
 
-        await Promise.all(all.map(async (elem) => {
-            const info = await sequelize.query(
-                'SELECT description from "deviceInfos" where "deviceId"=?',
-                { replacements: [elem.id], type: QueryTypes.SELECT },
-            );
-            elem.info = info;
+        all = await Promise.all(all.map(async (elem) => {
+            const info = await models.deviceInfo.findAll({
+                attributes: ['description'],
+                where: {
+                    deviceId: elem.id,
+                },
+            });
+            elem.dataValues.info = [];
+            info.forEach((deviceInfo) => {
+                elem.dataValues.info.push(deviceInfo.dataValues);
+            });
+            return parseDbAnswer(elem);
         }));
-
-        // Поясни це плзззззз ↑↑↑↑
 
         return all;
     }
 
     async getOne(id) {
-        const one = await sequelize.query(
-            `SELECT * FROM devices where id=${id}`,
-            { type: QueryTypes.SELECT },
-        );
-
+        const one = await models.device.findAll({
+            where: {
+                id,
+            },
+        });
         if (!one) {
             return ApiError.BadRequest(403, `there is no device with id:${id}`);
         }
-        const oneData = parseDbAnswer(one, 'select');
-        oneData.info = await sequelize.query(
-            'SELECT description from "deviceInfos" where "deviceId"=?',
-            { replacements: [id], type: QueryTypes.SELECT },
-        );
+        const oneData = parseDbAnswer(one[0]);
+        const oneInfo = await models.deviceInfo.findAll({
+            where: {
+                deviceId: id,
+            },
+        });
+
+        oneData.info = oneInfo.map((elem) => parseDbAnswer(elem).description);
         return oneData;
     }
 
     async info(deviceId, title, description) {
-        const postedInfo = await sequelize.query(
-            'INSERT INTO "deviceInfos" ("deviceId",title,description) VALUES (?,?,?) RETURNING *',
+        const postedInfo = await models.deviceInfo.create({
+            deviceId,
+            title,
+            description,
+        });
+        return parseDbAnswer(postedInfo);
+    }
+
+    async update({
+        id, name, price, rating, imgName, typeId, brandId,
+    }) {
+        const updated = await models.device.update(
             {
-                replacements: [deviceId, title, description],
-                type: QueryTypes.INSERT,
+                name,
+                price,
+                rating,
+                img: imgName,
+                typeId,
+                brandId,
+            },
+            {
+                where: {
+                    id,
+                },
             },
         );
-        return parseDbAnswer(postedInfo, 'select');
+        return updated;
+    }
+
+    async delete(id) {
+        await models.basket.destroy({
+            where: {
+                deviceId: id,
+            },
+        });
+        await models.deviceInfo.destroy({
+            where: {
+                deviceId: id,
+            },
+        });
+        const deletedDevice = await models.device.destroy({
+            where: {
+                id,
+            },
+        });
+        return deletedDevice;
     }
 }
 

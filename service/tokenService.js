@@ -7,8 +7,8 @@ class TokenService {
         const refreshToken = jwt.sign(payload, process.env.REFRESH_KEY, { expiresIn: '20h' });
         return {
             accessToken,
-            refreshToken
-        }
+            refreshToken,
+        };
     }
 
     validateAccess(token) {
@@ -16,12 +16,10 @@ class TokenService {
             throw ApiError.BadRequest(401, 'wrong acess token');
         }
         try {
-            console.log(jwt.verify(token, process.env.ACCESS_KEY));
-            let userData = jwt.verify(token, process.env.ACCESS_KEY);
-            console.log(userData);
+            const userData = jwt.verify(token, process.env.ACCESS_KEY);
             return userData;
         } catch (error) {
-            throw ApiError.BadRequest(401, 'token not valid')
+            throw ApiError.BadRequest(401, 'token not valid');
         }
     }
 
@@ -30,11 +28,10 @@ class TokenService {
             throw ApiError.BadRequest(401, 'wrong acess token');
         }
         try {
-            let userData = jwt.verify(token, process.env.REFRESH_KEY);
-            console.log(userData);
+            const userData = jwt.verify(token, process.env.REFRESH_KEY);
             return userData;
         } catch (error) {
-            throw ApiError.BadRequest(401, 'token not valid')
+            throw ApiError.BadRequest(401, 'token not valid');
         }
     }
     // чи норм практика validateToken(token,typeOftoken){

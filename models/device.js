@@ -5,9 +5,8 @@ const {
 module.exports = (sequelize, DataTypes) => {
   class device extends Model {
     static associate(models) {
-      device.hasOne(models.device);
-      device.hasOne(models.productType);
       device.hasMany(models.deviceInfo);
+      device.hasMany(models.basket);
     }
   }
   device.init({
